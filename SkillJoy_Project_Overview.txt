@@ -1,0 +1,86 @@
+================================================================================
+SKILLJOY: PROJECT OVERVIEW & TECHNICAL DOCUMENTATION
+================================================================================
+
+1. THE CORE IDEA & VISION
+--------------------------------------------------------------------------------
+SkillJoy is a modern, AI-powered learning and knowledge-sharing platform designed to bridge the gap between short-form entertainment and structured education. It caters to two primary distinct user types:
+- Learners (or Users): Individuals looking to acquire new skills rapidly through bite-sized video content (reels), track their learning streaks, earn XP/badges, and build a personalized knowledge library.
+- Creators: Educators, professionals, and influencers who produce short-form educational content, manage communities, distribute supplementary materials (like PDFs), and offer certifications.
+
+The platform emphasizes a premium, highly interactive UI/UX (featuring dark mode aesthetics, glassmorphism, and dynamic animations) and robust privacy controls to foster a safe and engaging learning environment.
+
+2. SYSTEM ARCHITECTURE & TECH STACK
+--------------------------------------------------------------------------------
+SkillJoy is built as a robust, scalable Monorepo (likely utilizing Turborepo) to share configurations and types seamlessly across the stack.
+
+Frontend (apps/web):
+- Framework: Next.js (App Router) for server-side rendering, SEO optimization, and routing.
+- Library: React.js
+- Styling & UI: Custom CSS / Styled Components with Framer Motion for fluid, micro-animations and page transitions.
+- State Management: Zustand (with persistence middleware for auth state like `useAuthStore`).
+- Real-time Client: Socket.IO Client for live updates and messaging.
+
+Backend API (apps/api):
+- Framework: NestJS (Node.js framework for scalable server-side applications).
+- Architecture: Modular, controller-service pattern.
+- Authentication: JWT (JSON Web Tokens) strategies, Argon2 for password hashing. Role-based Access Control (RBAC) using Guards.
+- Real-time Server: Socket.IO Gateway for WebSocket connections.
+
+Database & Storage (packages/database & External):
+- ORM: Prisma Client (providing type-safe database access).
+- Relational Database: PostgreSQL (storing user data, relationships, video metadata, etc.).
+- Cloud Storage: Cloudinary (used for hosting video reels, automatically generated thumbnails, profile avatars, and PDF documents).
+- Caching/Search (Auxiliary): Redis and Elasticsearch configured within the broader architecture for performance and advanced querying.
+
+Infrastructure & Deployment:
+- Containerization: Docker (for consistent local development environments).
+- Deployment Target: Configured for platforms like Render or similar cloud providers.
+
+
+3. CORE FEATURES: WHAT IS IMPLEMENTED & HOW
+--------------------------------------------------------------------------------
+
+A. Authentication & Authorization
+- Implementation: Users sign up and log in via the `/auth` endpoints. Passwords are encrypted using Argon2. The backend issues a JWT upon successful login.
+- How it works: The Next.js frontend stores the JWT in a persisted Zustand store (`authStore`). API requests from the client attach this token in the `Authorization` header. The NestJS backend uses `JwtAuthGuard` to protect private routes and `OptionalJwtAuthGuard` for routes (like public profiles) that behave differently based on whether a user is logged in. `RolesGuard` ensures only Creators/Admins can perform specific actions (like uploading reels).
+
+B. Video Content Delivery (Reels)
+- Implementation: Creators can upload short videos representing specific skills or subskills.
+- How it works: 
+  - Upload: The NestJS `VideoController` receives multipart form data. The `VideoService` pipes the file buffer directly to Cloudinary via a stream.
+  - Processing: Cloudinary stores the video and is configured to automatically extract a frame for the thumbnail (`thumbnailUrl`).
+  - Database: A `Video` record is created in Prisma, linking the `videoUrl`, `thumbnailUrl`, Creator ID, and categorization tags (Skill/Subskill).
+
+C. Document & Certification Management (PDF Proxy)
+- Implementation: Creators can attach supplementary PDFs to their reels.
+- How it works: To prevent direct, unauthenticated access to raw Cloudinary URLs and to handle CORS issues cleanly, a server-side proxy was built. 
+  - The endpoint `/api/videos/:id/pdf-proxy` checks if a PDF exists for the video.
+  - It generates a fresh, securely signed URL via the Cloudinary SDK.
+  - The NestJS server fetches the PDF buffer from Cloudinary and streams it back to the client with the correct `application/pdf` MIME type and headers.
+
+D. Dynamic User Profiles & Role-Based Layouts
+- Implementation: The platform dynamically renders different profile layouts based on the user's role.
+- How it works: 
+  - When visiting `/app/profile/[username]`, the frontend fetches user data. 
+  - If `role === 'LEARNER'` or `'USER'`, the UI renders a dashboard showing "Learning Activity" (heatmaps/streaks), "Skills Progress" (animated progress bars), and "Badges" earned via XP.
+  - If `role === 'CREATOR'`, the UI displays content-centric metrics like "Followers", "Total Views", and a grid of uploaded "Reels".
+
+E. Privacy & Follow Request System
+- Implementation: Users can set their accounts to Private.
+- How it works: 
+  - The `User` model in Prisma has an `isPrivate` boolean.
+  - If private, the `UserService.findByUsername` method checks if the requester is currently following the target. If not, it strips sensitive data and returns `isRestricted: true`.
+  - The frontend reads `isRestricted` and replaces the content grid with a blurred "This account is private" locked UI.
+  - When following a private account, the status becomes `PENDING`. The target user receives a "Follow Request" in their Requests tab, which they can Accept or Decline via dedicated API endpoints.
+
+F. Real-Time Social Features
+- Implementation: Watch history, likes, saves, comments, and direct messaging.
+- How it works: 
+  - Standard REST endpoints handle toggling likes/saves (`/api/videos/:id/like`). 
+  - Viewing a video triggers an upsert to the `WatchHistory` table in Prisma, enabling the "Recently Watched" feature.
+  - A Socket.IO connection (managed by `SocketProvider` on the frontend) listens for events (like new messages in communities) and broadcasts them to connected clients instantly.
+
+G. Categorization Backfill (Data Integrity)
+- Implementation: Ensuring all videos are correctly categorized for the "By Category" explorer.
+- How it works: Scripts utilizing the Prisma Client scan for older videos categorized simply as "General" and update their `category` and `subCategory` fields based on their relational `Skill` and `Subskill` data, ensuring the UI filters function perfectly.

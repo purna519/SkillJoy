@@ -1,0 +1,1010 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  USER
+  CREATOR
+  STAFF
+  ADMIN
+}
+
+enum Status {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum AuthProviderType {
+  GOOGLE
+  APPLE
+  GITHUB
+  DISCORD
+  EMAIL
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum FollowStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum CommunityRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+  COMMUNITY
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  AUDIO
+}
+
+enum LiveRoomStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum LiveRole {
+  HOST
+  COHOST
+  SPEAKER
+  LISTENER
+}
+
+enum ActionType {
+  WATCH
+  COMPLETE
+  LIKE
+  SHARE
+  COMMENT
+  POST
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MENTION
+  SYSTEM
+  LIVE_START
+}
+
+enum ReportTargetType {
+  USER
+  VIDEO
+  COMMENT
+  POST
+  COMMUNITY
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  NUDITY
+  VIOLENCE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationAction {
+  WARNING
+  DELETE_CONTENT
+  SUSPEND_USER
+  BAN_USER
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  CREATOR
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIAL
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+  PAYPAL
+  APPLE
+  GOOGLE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+// ==========================================
+// 1. AUTHENTICATION & IDENTITY DOMAIN
+// ==========================================
+
+model User {
+  id                  String    @id @default(uuid())
+
+  // ── Identity ──
+  username            String    @unique             // Globally unique across ALL roles
+  email               String                        // Unique per role — see @@unique below
+  phone               String?                       // Unique per role — see @@unique below
+  passwordHash        String?                       // Optional for OAuth users
+
+  // ── Profile info ──
+  fullName            String?
+  dateOfBirth         DateTime?
+  gender              String?
+
+  // ── Account ──
+  role                Role      @default(USER)
+  status              Status    @default(ACTIVE)
+  emailVerified       Boolean   @default(false)
+  emailVerificationToken  String?   @unique
+  emailVerifiedAt     DateTime?
+  phoneVerified       Boolean   @default(false)
+  onboardingCompleted Boolean   @default(false)
+  twoFactorEnabled    Boolean   @default(false)
+  isPrivate           Boolean   @default(false)
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  // Relations
+  userProfile          UserProfile?
+  creatorProfile       CreatorProfile?
+  staffProfile         StaffProfile?
+  adminProfile         AdminProfile?
+  settings             UserSettings?
+  sessions             Session[]
+  authProviders        AuthProvider[]
+  verificationRequests VerificationRequest[]
+
+  // Cross-domain relations
+  videos                 Video[]
+  videoLikes             VideoLike[]
+  videoComments          VideoComment[]
+  videoSaves             VideoSave[]
+  videoShares            VideoShare[]
+  playlists              Playlist[]
+  ownedCommunities       Community[]
+  communityMemberships   CommunityMember[]
+  communityPosts         CommunityPost[]
+  communityComments      CommunityComment[]
+  conversationMembers    ConversationMember[]
+  messagesSent           Message[]
+  liveRoomsCreated       LiveRoom[]
+  liveRoomParticipations LiveRoomParticipant[]
+  streaks                UserStreak?
+  achievements           UserAchievement[]
+  xpLogs                 XpLog[]
+  interests              UserInterest[]
+  watchHistory           WatchHistory[]
+  recommendationLogs     RecommendationLog[]
+  notifications          Notification[]
+  reportsFiled           Report[]              @relation("Reporter")
+  reportsReviewed        Report[]              @relation("Reviewer")
+  moderationLogs         ModerationLog[]       @relation("Moderator")
+  creatorAnalytics       CreatorAnalytics[]
+  subscriptions          Subscription[]
+  transactions           Transaction[]
+
+  // ── Follow System ──
+  followers            Follow[]              @relation("Following")
+  following            Follow[]              @relation("Follower")
+  watchLater           WatchLater[]
+
+  // ── Block System ──
+  blockedUsers         UserBlock[]           @relation("Blocker")
+  blockedBy            UserBlock[]           @relation("Blocked")
+
+  // ── Social Learning ──
+  learningTakes        LearningTake[]
+
+  // ── Uniqueness Rules ──
+  // Same email/phone ALLOWED across different roles (USER vs CREATOR)
+  // but NOT within the same role
+  @@unique([email, role])
+  @@unique([phone, role])
+}
+
+model UserProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName             String?
+  displayName          String?
+  bio                  String?
+  avatarUrl            String?
+  bannerUrl            String?
+  ageGroup             String?
+  country              String?
+  language             String?
+  timezone             String?
+  learningGoal         String?
+  dailyLearningMinutes Int      @default(15)
+  learningStyle        String?
+  streakCount          Int      @default(0)
+  xpPoints             Int      @default(0)
+  level                Int      @default(1)
+  skillsInterested     Json? // Array of skill IDs
+  communitiesJoined    Json? // Array of community IDs
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model CreatorProfile {
+  id                  String             @id @default(uuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creatorSlug         String             @unique
+  creatorTitle        String?
+  expertise           Json?
+  yearsExperience     Int?
+  certifications      Json?
+  socialLinks         Json?
+  portfolioUrl        String?
+  introVideoUrl       String?
+  verificationStatus  VerificationStatus @default(UNVERIFIED)
+  creatorLevel        String?
+  subscribersCount    Int                @default(0)
+  totalViews          BigInt             @default(0)
+  totalWatchTime      BigInt             @default(0)
+  totalCourses        Int                @default(0)
+  totalRevenue        Decimal            @default(0.0)
+  payoutMethod        Json?
+  creatorScore        Float              @default(0.0)
+  engagementRate      Float              @default(0.0)
+  featuredCreator     Boolean            @default(false)
+  liveEnabled         Boolean            @default(false)
+  monetizationEnabled Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model StaffProfile {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department      String?
+  staffLevel      String?
+  permissions     Json?
+  assignedRegions Json?
+  moderationScore Float     @default(0.0)
+  shiftSchedule   Json?
+  internalNotes   String?
+  activeStatus    Boolean   @default(true)
+  hiredAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AdminProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminLevel         String?
+  superAdmin         Boolean   @default(false)
+  accessScope        Json?
+  securityClearance  String?
+  emergencyAccess    Boolean   @default(false)
+  internalNotes      String?
+  lastSecurityReview DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model UserSettings {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                  Theme    @default(SYSTEM)
+  autoplayVideos         Boolean  @default(true)
+  reducedMotion          Boolean  @default(false)
+  pushNotifications      Boolean  @default(true)
+  emailNotifications     Boolean  @default(true)
+  aiPersonalization      Boolean  @default(true)
+  preferredLanguages     Json?
+  accessibilitySettings  Json?
+  privacySettings        Json?
+  recommendationSettings Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model AuthProvider {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       AuthProviderType
+  providerUserId String
+  accessToken    String?
+  refreshToken   String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([provider, providerUserId])
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  ipAddress        String?
+  userAgent        String?
+  deviceName       String?
+  location         String?
+  expiresAt        DateTime
+  revoked          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model VerificationRequest {
+  id                 String             @id @default(uuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verificationType   String
+  submittedDocuments Json?
+  status             VerificationStatus @default(PENDING)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  rejectionReason    String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+// ==========================================
+// 2. SKILL SYSTEM DOMAIN
+// ==========================================
+
+model SkillCategory {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
+  skills    Skill[]
+}
+
+model Skill {
+  id              String          @id @default(uuid())
+  categoryId      String?
+  category        SkillCategory?  @relation(fields: [categoryId], references: [id])
+  name            String
+  slug            String          @unique
+  description     String?
+  iconUrl         String?
+  bannerUrl       String?
+  difficultyLevel DifficultyLevel @default(BEGINNER)
+  featured        Boolean         @default(false)
+  totalLearners   Int             @default(0)
+  totalCreators   Int             @default(0)
+  totalContent    Int             @default(0)
+  trendingScore   Float           @default(0.0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  subskills     Subskill[]
+  videos        Video[]
+  playlists     Playlist[]
+  communities   Community[]
+  userInterests UserInterest[]
+}
+
+model Subskill {
+  id          String   @id @default(uuid())
+  skillId     String
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  videos    Video[]
+  playlists Playlist[]
+}
+
+// ==========================================
+// 3. VIDEO / REELS DOMAIN
+// ==========================================
+
+model Video {
+  id               String           @id @default(uuid())
+  creatorId        String
+  creator          User             @relation(fields: [creatorId], references: [id])
+  skillId          String?
+  skill            Skill?           @relation(fields: [skillId], references: [id])
+  subskillId       String?
+  subskill         Subskill?        @relation(fields: [subskillId], references: [id])
+  title            String
+  description      String?
+  videoUrl             String
+  thumbnailUrl         String?
+  cloudinaryPublicId   String?
+  pdfUrl               String?
+  durationSeconds      Int              @default(0)
+  visibility           Visibility       @default(PUBLIC)
+  processingStatus     ProcessingStatus @default(PROCESSING)
+  hashtags         Json?
+  language         String?
+  viewsCount       BigInt           @default(0)
+  likesCount       BigInt           @default(0)
+  commentsCount    BigInt           @default(0)
+  savesCount       BigInt           @default(0)
+  sharesCount      BigInt           @default(0)
+  watchTime        BigInt           @default(0)
+  completionRate   Float            @default(0.0)
+  aiScore          Float            @default(0.0)
+  trendingScore    Float            @default(0.0)
+  featured         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  segments           VideoSegment[]
+  likes              VideoLike[]
+  comments           VideoComment[]
+  saves              VideoSave[]
+  shares             VideoShare[]
+  playlistInclusions PlaylistVideo[]
+  watchHistory       WatchHistory[]
+  recommendationLogs RecommendationLog[]
+  watchLater         WatchLater[]
+  learningTakes      LearningTake[]
+
+  certificationUrl   String?
+  category           String           @default("General")
+  subCategory        String           @default("General")
+}
+
+model VideoSegment {
+  id              String   @id @default(uuid())
+  videoId         String
+  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  startTime       Float
+  endTime         Float
+  transcript      String?
+  // embeddingVector Unsupported("vector(1536)")? // Requires pgvector extension, omitting for basic prisma for now or storing as Json
+  embeddingVector Json?
+  createdAt       DateTime @default(now())
+}
+
+model VideoLike {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, videoId])
+}
+
+model VideoComment {
+  id              String         @id @default(uuid())
+  videoId         String
+  video           Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentCommentId String?
+  parentComment   VideoComment?  @relation("VideoReplies", fields: [parentCommentId], references: [id])
+  replies         VideoComment[] @relation("VideoReplies")
+  content         String
+  likesCount      Int            @default(0)
+  pinned          Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model VideoSave {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, videoId])
+}
+
+model VideoShare {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  platform  String?
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 4. PLAYLIST / LEARNING PATH DOMAIN
+// ==========================================
+
+model Playlist {
+  id           String     @id @default(uuid())
+  creatorId    String
+  creator      User       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  skillId      String?
+  skill        Skill?     @relation(fields: [skillId], references: [id])
+  subskillId   String?
+  subskill     Subskill?  @relation(fields: [subskillId], references: [id])
+  title        String
+  description  String?
+  thumbnailUrl String?
+  visibility   Visibility @default(PUBLIC)
+  totalVideos  Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  videos PlaylistVideo[]
+}
+
+model PlaylistVideo {
+  id         String   @id @default(uuid())
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  videoId    String
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  orderIndex Int
+  createdAt  DateTime @default(now())
+
+  @@unique([playlistId, videoId])
+}
+
+// ==========================================
+// 5. COMMUNITY DOMAIN
+// ==========================================
+
+model Community {
+  id             String     @id @default(uuid())
+  ownerId        String
+  owner          User       @relation(fields: [ownerId], references: [id])
+  skillId        String?
+  skill          Skill?     @relation(fields: [skillId], references: [id])
+  name           String
+  slug           String     @unique
+  description    String?
+  bannerUrl      String?
+  avatarUrl      String?
+  visibility     Visibility @default(PUBLIC)
+  membersCount   Int        @default(0)
+  postsCount     Int        @default(0)
+  liveRoomsCount Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  members   CommunityMember[]
+  posts     CommunityPost[]
+  liveRooms LiveRoom[]
+}
+
+model CommunityMember {
+  id          String        @id @default(uuid())
+  communityId String
+  community   Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        CommunityRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  @@unique([communityId, userId])
+}
+
+model CommunityPost {
+  id            String    @id @default(uuid())
+  communityId   String
+  community     Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content       String
+  attachments   Json?
+  likesCount    Int       @default(0)
+  commentsCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  comments CommunityComment[]
+}
+
+model CommunityComment {
+  id        String        @id @default(uuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+// ==========================================
+// 6. REALTIME CHAT DOMAIN
+// ==========================================
+
+model Conversation {
+  id        String           @id @default(uuid())
+  type      ConversationType @default(DIRECT)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  members  ConversationMember[]
+  messages Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  messageType    MessageType  @default(TEXT)
+  content        String?
+  attachments    Json?
+  readStatus     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+// ==========================================
+// 7. LIVE LEARNING DOMAIN
+// ==========================================
+
+model LiveRoom {
+  id              String         @id @default(uuid())
+  creatorId       String
+  creator         User           @relation(fields: [creatorId], references: [id])
+  communityId     String?
+  community       Community?     @relation(fields: [communityId], references: [id])
+  title           String
+  description     String?
+  roomStatus      LiveRoomStatus @default(SCHEDULED)
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  maxParticipants Int?
+  recordingUrl    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  participants LiveRoomParticipant[]
+}
+
+model LiveRoomParticipant {
+  id       String   @id @default(uuid())
+  roomId   String
+  room     LiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     LiveRole @default(LISTENER)
+  joinedAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
+
+// ==========================================
+// 8. GAMIFICATION DOMAIN
+// ==========================================
+
+model UserStreak {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak    Int      @default(0)
+  highestStreak    Int      @default(0)
+  lastActivityDate DateTime @db.Date
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  iconUrl     String?
+  xpReward    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model XpLog {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    ActionType
+  xpEarned  Int
+  createdAt DateTime   @default(now())
+}
+
+// ==========================================
+// 9. AI & RECOMMENDATION DOMAIN
+// ==========================================
+
+model UserInterest {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  score     Float    @default(0.0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, skillId])
+}
+
+model WatchHistory {
+  id                   String   @id @default(uuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId              String
+  video                Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  watchedSeconds       Float    @default(0.0)
+  completionPercentage Float    @default(0.0)
+  rewatched            Boolean  @default(false)
+  watchedAt            DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([userId, videoId])
+}
+
+model RecommendationLog {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId             String
+  video               Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  recommendationScore Float    @default(0.0)
+  modelVersion        String?
+  createdAt           DateTime @default(now())
+}
+
+// ==========================================
+// 10. NOTIFICATION DOMAIN
+// ==========================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  actionUrl String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+// ==========================================
+// 11. MODERATION & SAFETY DOMAIN
+// ==========================================
+
+model Report {
+  id           String           @id @default(uuid())
+  reporterId   String
+  reporter     User             @relation("Reporter", fields: [reporterId], references: [id])
+  targetType   ReportTargetType
+  targetId     String
+  reason       ReportReason
+  description  String?
+  status       ReportStatus     @default(PENDING)
+  reviewedById String?
+  reviewer     User?            @relation("Reviewer", fields: [reviewedById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model ModerationLog {
+  id          String           @id @default(uuid())
+  moderatorId String
+  moderator   User             @relation("Moderator", fields: [moderatorId], references: [id])
+  action      ModerationAction
+  targetType  ReportTargetType
+  targetId    String
+  reason      String?
+  createdAt   DateTime         @default(now())
+}
+
+// ==========================================
+// 12. ANALYTICS DOMAIN
+// ==========================================
+
+model CreatorAnalytics {
+  id              String   @id @default(uuid())
+  creatorId       String
+  creator         User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date
+  totalViews      BigInt   @default(0)
+  followersGained Int      @default(0)
+  watchTime       BigInt   @default(0)
+  revenue         Decimal  @default(0.0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([creatorId, date])
+}
+
+model PlatformMetrics {
+  id                 String   @id @default(uuid())
+  date               DateTime @unique @db.Date
+  activeUsers        BigInt   @default(0)
+  videosUploaded     BigInt   @default(0)
+  watchHours         BigInt   @default(0)
+  communitiesCreated BigInt   @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ==========================================
+// 13. MONETIZATION DOMAIN
+// ==========================================
+
+model Subscription {
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan
+  status    SubscriptionStatus @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  expiresAt DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Decimal
+  currency        String          @default("USD")
+  paymentProvider PaymentProvider
+  status          PaymentStatus   @default(PENDING)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Follow {
+  id          String       @id @default(uuid())
+  followerId  String
+  follower    User         @relation("Follower", fields: [followerId], references: [id])
+  followingId String
+  following   User         @relation("Following", fields: [followingId], references: [id])
+  status      FollowStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([followerId, followingId])
+}
+
+model WatchLater {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, videoId])
+}
+
+model UserBlock {
+  id          String   @id @default(uuid())
+  blockerId   String
+  blocker     User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId   String
+  blocked     User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model LearningTake {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String?
+  video     Video?   @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  likesCount Int     @default(0)
+
+  @@index([userId])
+  @@index([videoId])
+}

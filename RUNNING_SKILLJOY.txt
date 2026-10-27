@@ -1,0 +1,90 @@
+================================================================================
+SKILLJOY: THE FUTURE OF SOCIAL LEARNING - RUNNING GUIDE
+================================================================================
+
+To run SkillJoy completely, you need three main environments:
+1. Node.js (Frontend & Backend API)
+2. Python (AI Microservice)
+3. Docker (Database, Cache, and Search Engine)
+
+--------------------------------------------------------------------------------
+1. PREREQUISITES & INSTALLATION
+--------------------------------------------------------------------------------
+
+A. DOCKER (ESSENTIAL)
+   - What it is: A tool that runs "containers" (isolated mini-computers for software).
+   - Why we need it: It runs our Database (PostgreSQL), Cache (Redis), and Search Engine (Elasticsearch) without you having to install them manually on your Windows.
+   - How to install:
+     1. Go to https://www.docker.com/products/docker-desktop/
+     2. Download "Docker Desktop for Windows".
+     3. Install it and RESTART your computer when prompted.
+     4. After restart, open Docker Desktop and wait for the "Engine" to start (green icon).
+
+B. NODE.JS (VERSION 20+)
+   - What it is: The engine that runs our JavaScript/TypeScript code.
+   - Use: Runs the Next.js website and the NestJS API.
+   - How to install: Go to https://nodejs.org/ and download the "LTS" version.
+
+C. PYTHON (VERSION 3.9+)
+   - What it is: The engine for our AI Recommendation microservice.
+   - Use: Processes user data to suggest the best reels.
+   - How to install: Go to https://www.python.org/downloads/ (Make sure to check "Add Python to PATH" during installation).
+
+--------------------------------------------------------------------------------
+2. SETTING UP THE PROJECT (ONE-TIME ONLY)
+--------------------------------------------------------------------------------
+
+1. Open a Terminal (PowerShell or CMD) in the project root folder.
+2. Install Node dependencies:
+   > npm install
+
+3. Set up the Python Environment:
+   > cd apps/ai
+   > python -m venv venv
+   > ./venv/Scripts/activate
+   > pip install fastapi uvicorn
+   > cd ../..
+
+--------------------------------------------------------------------------------
+3. HOW TO RUN THE WEBSITE
+--------------------------------------------------------------------------------
+
+Follow these steps in order:
+
+STEP 1: Start the Infrastructure (Databases)
+   Open your terminal and run:
+   > docker compose up -d
+   (This starts PostgreSQL, Redis, and Elasticsearch in the background).
+
+STEP 2: Sync the Database Schema
+   Tell the database about our SkillJoy structure:
+   > npx prisma db push --schema=packages/database/prisma/schema.prisma
+   npm run push --workspace=@skilljoy/database
+
+STEP 3: Start the Main Servers
+   In your terminal, run:
+   > npm run dev
+   (This starts the Next.js Website on http://localhost:3000 AND the NestJS API).
+
+STEP 4: Start the AI Service (Optional but recommended)
+   Open a SECOND terminal window:
+   > cd apps/ai
+   > ./venv/Scripts/activate
+   > python main.py
+   (This starts the AI engine on http://localhost:8000).
+
+--------------------------------------------------------------------------------
+4. WHAT EACH PART DOES (USEFULNESS)
+--------------------------------------------------------------------------------
+
+- POSTGRESQL (Docker): Stores all users, videos, comments, and skills. (The Brain).
+- REDIS (Docker): Handles super-fast sessions and trending algorithms. (The Memory).
+- ELASTICSEARCH (Docker): Powers the "Global Search" bar so you can find skills instantly. (The Librarian).
+- NESTJS API (api): Connects the website to the databases. (The Bridge).
+- NEXT.JS (web): The beautiful monochromatic website you see. (The Face).
+- FASTAPI (ai): Suggests reels based on what you like watching. (The Intelligence).
+
+================================================================================
+YOU ARE READY! 
+Open http://localhost:3000 in your browser to start scrolling into skills.
+================================================================================
